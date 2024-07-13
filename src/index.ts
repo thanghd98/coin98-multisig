@@ -1,44 +1,51 @@
-import { CHAIN_DATA } from "@wallet/constants";
-import { Contract, ethers, providers, Wallet } from "ethers";
+import { BigNumber, Contract, ethers, providers, Wallet } from "ethers";
 import { MULTISIGN_ABI, MULTISIGN_CONTRACT_ADDRESS } from "./constants";
-import { ChainType, MetaTransaction, SafeSignature, SafeTransaction, WalletData } from "./types";
+import { MetaTransaction, SafeSignature, SafeTransaction, WalletData } from "./types";
 import { buildSafeTx, buildSignatureBytes, safeSignTypedData } from "./utils/transaction";
 
 export class MultiSignature{
-  private providerCache: Map<ChainType, ethers.providers.JsonRpcProvider> = new Map()
+  provider: ethers.providers.JsonRpcProvider
+  contract: Contract
 
-  constructor(){}
+  constructor(multiSigContract: string){
+    this.provider = new providers.JsonRpcProvider("https://rpc.viction.xyz", 88);
+    this.contract = new Contract(multiSigContract || MULTISIGN_CONTRACT_ADDRESS, MULTISIGN_ABI, this.provider)
+  }
+
+  async getOwner(): Promise<string[]>{
+      const owners = await this.contract.functions.getOwners()
+      return owners
+  }
+
+  async getThresHold(): Promise<BigNumber[]>{
+    const threshold = await this.contract.functions.getThreshold()
+    return threshold
+  }
 
   async buildSafeTransaction(params: MetaTransaction): Promise<SafeTransaction> {
     const { to, value, data } = params
-
-    const contract = new Contract(MULTISIGN_CONTRACT_ADDRESS, MULTISIGN_ABI)
-    const nonce = await contract.nonce()
+    const nonce = await this.contract.functions.nonce();
 
     const safeTransaction = buildSafeTx({
       to,
       data,
       value,
-      nonce
+      nonce: nonce[0].toString()
     })
 
     return safeTransaction
   }
 
   async signData(wallet: WalletData, safeTx: SafeTransaction): Promise<SafeSignature>{
-    const provider = this.getClient()
-    const signer = new Wallet(wallet?.privateKey, provider)
-
+    const signer = new Wallet(wallet?.privateKey, this.provider)
     const signature = await safeSignTypedData(signer, MULTISIGN_CONTRACT_ADDRESS, safeTx)
 
     return signature
   }
 
-  async execTransaction(wallet: Wallet, signatures: SafeSignature[], safeTransaction: SafeTransaction):Promise<string>{
+  async execTransaction(wallet: WalletData, signatures: SafeSignature[], safeTransaction: SafeTransaction):Promise<string>{
     const signatureBytes = buildSignatureBytes(signatures);
-
-    const provider = this.getClient()
-    const signer = new Wallet(wallet?.privateKey, provider)
+    const signer = new Wallet(wallet?.privateKey, this.provider)
 
     const contract = new Contract(MULTISIGN_CONTRACT_ADDRESS, MULTISIGN_ABI, signer)
 
@@ -57,18 +64,4 @@ export class MultiSignature{
   
       return transaction.hash
   }
-
-  getClient(chain: ChainType = 'tomo'): ethers.providers.JsonRpcProvider{
-    const chainData = CHAIN_DATA[chain]
-
-    if(this.providerCache.has(chain)){
-      const client = this.providerCache.get(chain)
-      return client as ethers.providers.JsonRpcProvider
-    }
-
-    const provider = new providers.JsonRpcProvider(chainData.rpcURL, chainData.numChainId);
-    this.providerCache.set(chain, provider)
-
-    return provider as ethers.providers.JsonRpcProvider
-  } 
 }
