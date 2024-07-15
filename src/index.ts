@@ -1,15 +1,17 @@
 import { BigNumber, Contract, ethers, providers, Wallet } from "ethers";
-import { MULTISIGN_ABI, MULTISIGN_CONTRACT_ADDRESS } from "./constants";
+import { MULTISIGN_ABI, MULTISIGN_CONTRACT_ADDRESS} from "./constants";
 import { MetaTransaction, SafeSignature, SafeTransaction, WalletData } from "./types";
 import { buildSafeTx, buildSignatureBytes, safeSignTypedData } from "./utils/transaction";
 
 export class MultiSignature{
   provider: ethers.providers.JsonRpcProvider
+  multisigContractAddress: string
   contract: Contract
 
-  constructor(multiSigContract: string){
+  constructor(multiSigContractAddress?: string){
+    this.multisigContractAddress = multiSigContractAddress || MULTISIGN_CONTRACT_ADDRESS
     this.provider = new providers.JsonRpcProvider("https://rpc.viction.xyz", 88);
-    this.contract = new Contract(multiSigContract || MULTISIGN_CONTRACT_ADDRESS, MULTISIGN_ABI, this.provider)
+    this.contract = new Contract(this.multisigContractAddress, MULTISIGN_ABI, this.provider)
   }
 
   async getOwner(): Promise<string[]>{
@@ -38,7 +40,7 @@ export class MultiSignature{
 
   async signData(wallet: WalletData, safeTx: SafeTransaction): Promise<SafeSignature>{
     const signer = new Wallet(wallet?.privateKey, this.provider)
-    const signature = await safeSignTypedData(signer, MULTISIGN_CONTRACT_ADDRESS, safeTx)
+    const signature = await safeSignTypedData(signer, this.multisigContractAddress, safeTx)
 
     return signature
   }
@@ -47,7 +49,7 @@ export class MultiSignature{
     const signatureBytes = buildSignatureBytes(signatures);
     const signer = new Wallet(wallet?.privateKey, this.provider)
 
-    const contract = new Contract(MULTISIGN_CONTRACT_ADDRESS, MULTISIGN_ABI, signer)
+    const contract = new Contract(this.multisigContractAddress, MULTISIGN_ABI, signer)
 
     const transaction = await contract.execTransaction(
       safeTransaction.to,
