@@ -61,7 +61,7 @@ export class MultiSignature{
       safeTransaction.refundReceiver,
       signatureBytes,
       {
-        gasLimit: 250000
+        gasLimit: 210000
       }
     );
   
