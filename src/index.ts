@@ -60,6 +60,9 @@ export class MultiSignature{
       safeTransaction.gasToken,
       safeTransaction.refundReceiver,
       signatureBytes,
+      {
+        gasLimit: 250000
+      }
     );
   
       return transaction.hash
